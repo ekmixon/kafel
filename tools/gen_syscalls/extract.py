@@ -27,30 +27,26 @@ def output(str):
 def get_int_val(command):
 	out = gdb.execute(command, False, True)
 	m = re.search('\$[0-9]* = (.*)', out)
-	return int(m.group(1))
+	return int(m[1])
 
 def get_string_val(command):
 	out = gdb.execute(command, False, True)
 	m = re.search('\$[0-9]* = 0x[0-9a-f]* "(.*)"', out)
-	return m.group(1)
+	return m[1]
 
 def output_syscall(nr, name):
 	try:
-		real_name = get_string_val("print __syscall_meta__"+name+"->name")
-		nb_args = get_int_val("print __syscall_meta__"+name+"->nb_args")
+		real_name = get_string_val(f"print __syscall_meta__{name}->name")
+		nb_args = get_int_val(f"print __syscall_meta__{name}->nb_args")
 	except gdb.error:
 		return
-	m = re.search("^[Ss]y[Ss]_(.*)$", real_name)
-	if m:
-		real_name = m.group(1)
-	else:
-		real_name = name
+	real_name = m[1] if (m := re.search("^[Ss]y[Ss]_(.*)$", real_name)) else name
 	output('\t{"'+real_name+'", '+str(nr)+', {')
 	for j in xrange(0, nb_args):
-		arg_name = get_string_val("print __syscall_meta__"+name+"->args["+str(j)+"]")
-		arg_type = get_string_val("print __syscall_meta__"+name+"->types["+str(j)+"]")
-		arg_size = get_int_val("print sizeof("+arg_type+")")
-		output('[ARG_'+str(j)+'] = {"'+arg_name+'", '+str(arg_size)+'}, ')
+		arg_name = get_string_val(f"print __syscall_meta__{name}->args[{str(j)}]")
+		arg_type = get_string_val(f"print __syscall_meta__{name}->types[{str(j)}]")
+		arg_size = get_int_val(f"print sizeof({arg_type})")
+		output(f'[ARG_{str(j)}' + '] = {"' + arg_name + '", ' + str(arg_size) + '}, ')
 	output('}},\n')
 
 num_syscalls=get_int_val("print sizeof(sys_call_table)/sizeof(sys_call_table[0])")
@@ -64,12 +60,11 @@ if num_syscalls <= 0:
 
 for i in xrange(0, num_syscalls):
 	try:
-		out = gdb.execute(table_cmd+"["+str(i)+"]", False, True)
+		out = gdb.execute(f"{table_cmd}[{str(i)}]", False, True)
 	except gdb.error:
 		continue
-	m = re.search(syscall_regex, out)
-	if m:
-		name = m.group(2)
+	if m := re.search(syscall_regex, out):
+		name = m[2]
 		output_syscall(i, name)
 
 out_file.close()
